@@ -1,0 +1,10 @@
+{
+  "config": {
+    "step": {
+      "user": {"title": "Connect to IEC", "description": "Enter the Israeli ID registered with Israel Electric Company.", "data": {"id_number": "Israeli ID number"}},
+      "otp": {"title": "Verify IEC account", "description": "Enter the one-time code IEC sent by {delivery}.", "data": {"otp": "One-time code"}}
+    },
+    "error": {"invalid_id": "Enter a valid Israeli ID number.", "cannot_connect": "Unable to contact IEC or request a one-time code.", "invalid_auth": "The code was invalid or expired.", "no_contract": "No electricity contract was found for this account."}
+  },
+  "entity": {"sensor": {"total_import": {"name": "Total imported energy"}, "total_export": {"name": "Total exported energy"}, "period_import": {"name": "Imported energy in latest period"}, "period_export": {"name": "Exported energy in latest period"}}}
+}
