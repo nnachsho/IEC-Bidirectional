@@ -1,11 +1,12 @@
 {
   "domain": "iec",
   "name": "Israel Electric Company (IEC)",
-  "codeowners": [],
+  "codeowners": ["@nnachsho"],
   "config_flow": true,
-  "documentation": "https://github.com/guykhmel/iec-api",
+  "documentation": "https://github.com/nnachsho/IEC-Bidirectional",
+  "issue_tracker": "https://github.com/nnachsho/IEC-Bidirectional/issues",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "requirements": ["iec-api==0.5.14"],
-  "version": "0.1.0"
+  "version": "0.1.1"
 }
