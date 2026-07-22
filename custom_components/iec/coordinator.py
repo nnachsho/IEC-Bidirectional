@@ -63,15 +63,27 @@ class IECCoordinator(DataUpdateCoordinator[IECMeterData]):
             latest_invoice = next((invoice for invoice in (invoices.invoices if invoices else []) if invoice.to_date), None)
             last_invoice_date = latest_invoice.to_date if latest_invoice else datetime.now() - timedelta(days=31)
 
-            report = await self.client.get_remote_reading(
-                meter_kind="Consumption",
-                meter_serial_number=last_meter.serial_number,
-                meter_code=int(device.device_code or 0),
-                last_invoice_date=last_invoice_date,
-                from_date=datetime.now() - timedelta(days=2),
-                resolution=ReadingResolution.DAILY,
-                contract_id=self.entry.data[CONF_CONTRACT_ID],
-            )
+            # IEC enables RemoteReadingRange only for some smart-meter accounts.
+            # A server-side 500 from that optional endpoint must not make the
+            # standard LastMeterReading endpoint unavailable in Home Assistant.
+            remote_error: str | None = None
+            try:
+                report = await self.client.get_remote_reading(
+                    meter_kind="Consumption",
+                    meter_serial_number=last_meter.serial_number,
+                    meter_code=int(device.device_code or 0),
+                    last_invoice_date=last_invoice_date,
+                    from_date=datetime.now() - timedelta(days=2),
+                    resolution=ReadingResolution.DAILY,
+                    contract_id=self.entry.data[CONF_CONTRACT_ID],
+                )
+            except Exception as err:
+                _LOGGER.warning(
+                    "IEC remote import/export readings are unavailable; using meter-register readings instead: %s",
+                    err,
+                )
+                report = None
+                remote_error = str(err)
             meter = report.meter_list[0] if report and report.meter_list else None
             future = meter.future_consumption_info if meter else None
             readings = [
@@ -87,7 +99,12 @@ class IECCoordinator(DataUpdateCoordinator[IECMeterData]):
             result = IECMeterData(
                 meter_serial=last_meter.serial_number,
                 meter_code=device.device_code,
-                total_import=(future.total_import if future else None) or (meter.total_import if meter else None),
+                # IEC's documented LastMeterReading sample uses code 01 for the
+                # cumulative import register. It provides a useful fallback when
+                # the optional smart-meter remote-reading service is disabled.
+                total_import=(future.total_import if future else None)
+                or (meter.total_import if meter else None)
+                or next((item.reading for item in last_meter.meter_readings if item.reading_code == "01"), None),
                 total_export=(future.total_export if future else None) or (meter.total_export if meter else None),
                 period_import=meter.total_consumption_for_period if meter else None,
                 period_export=meter.total_back_stream_for_period if meter else None,
@@ -97,6 +114,8 @@ class IECCoordinator(DataUpdateCoordinator[IECMeterData]):
                 attributes={
                     "report_status": report.report_status if report else None,
                     "report_status_text": report.report_status_text if report else None,
+                    "remote_reading_available": report is not None,
+                    "remote_reading_error": remote_error,
                     "period_count": meter.number_of_period_aggregated if meter else None,
                     "period_status": meter.status_for_period if meter else None,
                     "intervals": [
