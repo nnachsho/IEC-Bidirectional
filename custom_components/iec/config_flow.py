@@ -58,30 +58,36 @@ class IECConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None and self._client and self._id_number:
             try:
                 await self._client.verify_otp(user_input["otp"])
-                # The customer endpoint is the stable IEC account-discovery route.
-                # The newer accounts/outages route can return HTTP 500 for valid
-                # residential accounts, so do not use it during initial setup.
-                customer = await self._client.get_customer()
-                contracts = await self._client.get_contracts(customer.bp_number) if customer else []
-                contract = contracts[0] if contracts else None
-                if not customer or not contract:
-                    errors["base"] = "no_contract"
-                else:
-                    await self.async_set_unique_id(f"iec_{customer.bp_number}_{contract.contract_id}")
-                    self._abort_if_unique_id_configured()
-                    token = asdict(self._client.get_token())
-                    return self.async_create_entry(
-                        title=f"IEC {contract.address}",
-                        data={
-                            CONF_ID_NUMBER: self._id_number,
-                            CONF_TOKEN: token,
-                            "bp_number": customer.bp_number,
-                            CONF_CONTRACT_ID: contract.contract_id,
-                        },
-                    )
             except Exception:
                 _LOGGER.debug("IEC OTP verification failed", exc_info=True)
                 errors["base"] = "invalid_auth"
+            else:
+                try:
+                    # The customer endpoint is the stable IEC account-discovery route.
+                    # The newer accounts/outages route can return HTTP 500 for valid
+                    # residential accounts, so do not use it during initial setup.
+                    customer = await self._client.get_customer()
+                    contracts = await self._client.get_contracts(customer.bp_number) if customer else []
+                    contract = contracts[0] if contracts else None
+                except Exception:
+                    _LOGGER.debug("IEC account discovery failed after OTP verification", exc_info=True)
+                    errors["base"] = "cannot_connect"
+                else:
+                    if not customer or not contract:
+                        errors["base"] = "no_contract"
+                    else:
+                        await self.async_set_unique_id(f"iec_{customer.bp_number}_{contract.contract_id}")
+                        self._abort_if_unique_id_configured()
+                        token = asdict(self._client.get_token())
+                        return self.async_create_entry(
+                            title=f"IEC {contract.address}",
+                            data={
+                                CONF_ID_NUMBER: self._id_number,
+                                CONF_TOKEN: token,
+                                "bp_number": customer.bp_number,
+                                CONF_CONTRACT_ID: contract.contract_id,
+                            },
+                        )
 
         return self.async_show_form(
             step_id="otp",
