@@ -105,7 +105,13 @@ class IECCoordinator(DataUpdateCoordinator[IECMeterData]):
                 total_import=(future.total_import if future else None)
                 or (meter.total_import if meter else None)
                 or next((item.reading for item in last_meter.meter_readings if item.reading_code == "01"), None),
-                total_export=(future.total_export if future else None) or (meter.total_export if meter else None),
+                # IEC returns export under futureBackStream for some accounts
+                # and under totalExport for others. Prefer the explicit total,
+                # then use the equivalent back-stream field as a fallback.
+                total_export=(future.total_export if future else None)
+                or (future.future_back_stream if future else None)
+                or (meter.total_export if meter else None)
+                or (meter.total_back_stream_for_period if meter else None),
                 period_import=meter.total_consumption_for_period if meter else None,
                 period_export=meter.total_back_stream_for_period if meter else None,
                 period_start=meter.start_date.isoformat() if meter and meter.start_date else None,
@@ -116,6 +122,9 @@ class IECCoordinator(DataUpdateCoordinator[IECMeterData]):
                     "report_status_text": report.report_status_text if report else None,
                     "remote_reading_available": report is not None,
                     "remote_reading_error": remote_error,
+                    "remote_import": future.total_import if future else None,
+                    "remote_export": future.total_export if future else None,
+                    "remote_back_stream": future.future_back_stream if future else None,
                     "period_count": meter.number_of_period_aggregated if meter else None,
                     "period_status": meter.status_for_period if meter else None,
                     "intervals": [
